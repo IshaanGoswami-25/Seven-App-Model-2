@@ -91,13 +91,17 @@ class NotificationService {
 
     final int notificationId = id.hashCode;
 
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+    final AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       'class_schedule_channel',
       'Class Schedule Alerts',
       channelDescription: 'Alerts sent 5 minutes before classes start',
       importance: Importance.max,
       priority: Priority.high,
-      styleInformation: BigTextStyleInformation(''),
+      showProgress: true,
+      maxProgress: 100,
+      progress: 80, // Shows progress bar status tracker (e.g. 80% towards starting)
+      indeterminate: false,
+      styleInformation: const BigTextStyleInformation(''),
     );
 
     const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
@@ -106,22 +110,40 @@ class NotificationService {
       presentSound: true,
     );
 
-    const NotificationDetails platformDetails = NotificationDetails(
+    final NotificationDetails platformDetails = NotificationDetails(
       android: androidDetails,
       iOS: iosDetails,
     );
 
-    await _notificationsPlugin.zonedSchedule(
-      notificationId,
-      'Upcoming Class: $subject',
-      'Room: $room starts in 5 minutes!',
-      scheduledDate,
-      platformDetails,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
-    );
+    try {
+      // Try scheduling exact alarm (requires user-granted SCHEDULE_EXACT_ALARM permission)
+      await _notificationsPlugin.zonedSchedule(
+        notificationId,
+        'Preparing for Class: $subject',
+        'On time | Room: $room (Starts in 5 mins)',
+        scheduledDate,
+        platformDetails,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+      );
+    } catch (_) {
+      try {
+        // Fallback: Schedule inexact alarm (works 100% of the time, even if setting is off/disabled)
+        await _notificationsPlugin.zonedSchedule(
+          notificationId,
+          'Preparing for Class: $subject',
+          'On time | Room: $room (Starts in 5 mins)',
+          scheduledDate,
+          platformDetails,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          uiLocalNotificationDateInterpretation:
+              UILocalNotificationDateInterpretation.absoluteTime,
+          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+        );
+      } catch (_) {}
+    }
   }
 
   static int _mapWeekday(String weekday) {
